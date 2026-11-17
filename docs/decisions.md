@@ -21,3 +21,18 @@ Short records of non-obvious choices. Newest last. Format: context → decision 
 **Context:** create-next-app pinned `@types/node@^20`, which conflicts with Vitest 5's peer range (>=22). Local Node is 24.
 **Decision:** Use `@types/node@^24`. CI also runs Node 24.
 **Consequence:** Types match the runtime. Bump both together.
+
+## 005 — Prototype runs as a fixed dev user (2026-11-17)
+**Context:** We want a working local prototype before setting up OAuth apps for Auth.js.
+**Decision:** `getCurrentUserId()` in `src/lib/auth/current-user.ts` returns `DEV_USER_ID` from `.env.local`. All queries still filter by that user id.
+**Consequence:** Adding Auth.js later only changes that one function. `applications.user_id` is `text` (Auth.js ids are strings) and gets its foreign key when the users table exists.
+
+## 006 — Creating an application writes the first StatusEvent (2026-11-17)
+**Context:** Applications can be added at any status, for example one that is already at the interview stage. Stats need to know where each application entered the pipeline.
+**Decision:** On create, insert a `StatusEvent` with `fromStatus = null` and `toStatus` set to the starting status, in the same transaction as the application row. Status changes lock the row (`SELECT … FOR UPDATE`), check `validateTransition`, then update the status and insert the event together.
+**Consequence:** Every application has a complete history from its first event. Two status changes running at the same moment can't both pass validation against the same old status.
+
+## 007 — postgres.js driver and `db:push` for the prototype (2026-11-17)
+**Context:** We start on local Postgres and will move to Neon.
+**Decision:** Use Drizzle with `postgres` (postgres.js). It speaks the plain Postgres protocol, so it works with both local Postgres and Neon's pooled URL. Use `drizzle-kit push` while the schema is still changing.
+**Consequence:** Moving to Neon only needs a new `DATABASE_URL`. Before real data lives in Neon, switch to generated migrations (`drizzle-kit generate` + `migrate`).

@@ -11,8 +11,22 @@ Stack: Next.js (App Router) · TypeScript · PostgreSQL (Neon) + Drizzle · Auth
 ```bash
 npm install
 cp .env.example .env.local   # fill in values
+npm run db:push              # create/update tables
 npm run dev                  # http://localhost:3000
 ```
+
+### Local database
+
+Any Postgres 14+ works. As the `postgres` superuser, create a role and database
+(pick your own password and put the same one in `DATABASE_URL`):
+
+```sql
+CREATE ROLE app_tracker WITH LOGIN PASSWORD '<password>';
+CREATE DATABASE app_tracker OWNER app_tracker;
+```
+
+The prototype has no login yet: every request acts as `DEV_USER_ID`
+(see `docs/decisions.md`, 005).
 
 ## Scripts
 
