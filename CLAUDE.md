@@ -46,3 +46,4 @@ reminders and pipeline statistics. Built by Robin as a portfolio project.
 - `src/components/` — UI components
 - `tests/e2e/` — Playwright specs
 - `docs/decisions.md` — architecture decision log
+ 
