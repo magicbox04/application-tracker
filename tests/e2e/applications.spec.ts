@@ -139,6 +139,62 @@ test("edit an application's details without touching its status", async ({ page 
   await expect(page).toHaveURL("/");
 });
 
+test("undo a mistaken status change, one step at a time", async ({ page }) => {
+  const company = `E2E Undo ${Date.now()}`;
+  const label = `${company} — Designer`;
+  const main = page.getByRole("main");
+
+  await page.goto("/");
+  await main.getByLabel("Company *").fill(company);
+  await main.getByLabel("Role *").fill("Designer");
+  await main.getByRole("button", { name: "Add application" }).click();
+  await expect(main.getByRole("status")).toHaveText("Application added.");
+  await main.getByRole("link", { name: label }).click();
+  await expect(main.getByRole("heading", { name: label })).toBeVisible();
+
+  const badge = main.getByTestId("status-badge");
+  const history = main.getByTestId("status-history").locator("li");
+  const undo = main.getByRole("button", { name: /^Undo last change/ });
+
+  // Nothing to undo right after creation
+  await expect(undo).toHaveCount(0);
+
+  // APPLIED -> INTERVIEW -> REJECTED (the "mistake")
+  await main.getByLabel("New status").selectOption("INTERVIEW");
+  await main.getByRole("button", { name: "Update" }).click();
+  await expect(badge).toHaveText("Interview");
+  await main.getByLabel("New status").selectOption("REJECTED");
+  await main.getByRole("button", { name: "Update" }).click();
+  await expect(badge).toHaveText("Rejected");
+  await expect(history).toHaveCount(3);
+
+  // Undo -> back to Interview, and the event is gone from history
+  page.once("dialog", (dialog) => dialog.accept());
+  await expect(undo).toHaveText("Undo last change (Interview → Rejected)");
+  await undo.click();
+  await expect(badge).toHaveText("Interview");
+  await expect(history).toHaveCount(2);
+  await expect(main.getByLabel("New status")).toBeVisible();
+
+  // Dismissing the confirm dialog changes nothing
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await undo.click();
+  await expect(badge).toHaveText("Interview");
+  await expect(history).toHaveCount(2);
+
+  // Undo again -> back to Applied; creation event can't be undone
+  page.once("dialog", (dialog) => dialog.accept());
+  await undo.click();
+  await expect(badge).toHaveText("Applied");
+  await expect(history).toHaveCount(1);
+  await expect(undo).toHaveCount(0);
+
+  // Clean up
+  page.once("dialog", (dialog) => dialog.accept());
+  await main.getByRole("button", { name: `Delete ${label}` }).click();
+  await expect(page).toHaveURL("/");
+});
+
 test("edit page for an unknown id shows the not-found page", async ({ page }) => {
   await page.goto("/applications/00000000-0000-4000-8000-000000000000/edit");
   await expect(page.getByText("This page could not be found.")).toBeVisible();
