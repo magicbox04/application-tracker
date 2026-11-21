@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { ApplicationList } from "@/components/application-list";
-import { NewApplicationForm } from "@/components/new-application-form";
+import { ApplicationForm } from "@/components/application-form";
 
 export default function Home() {
   return (
@@ -16,7 +16,7 @@ export default function Home() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">New application</h2>
-        <NewApplicationForm />
+        <ApplicationForm mode="create" />
       </section>
 
       <section className="flex flex-col gap-3">

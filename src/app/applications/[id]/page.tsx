@@ -80,7 +80,13 @@ export default async function ApplicationPage({
         </ol>
       </section>
 
-      <div>
+      <div className="flex items-center gap-2">
+        <Link
+          href={`/applications/${app.id}/edit`}
+          className="rounded-md border border-zinc-300 px-3 py-1 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+        >
+          Edit
+        </Link>
         <DeleteButton applicationId={app.id} label={`${app.company} — ${app.role}`} />
       </div>
     </main>
