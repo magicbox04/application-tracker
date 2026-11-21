@@ -42,3 +42,8 @@ Short records of non-obvious choices. Newest last. Format: context → decision 
 **Decision:** `updateApplicationSchema` has no `status` field, so status only changes through `changeStatusAction`, which runs the transition rules and writes a `StatusEvent`. When editing, a blank or missing optional field means "clear it" and is stored as `null`. When creating, a blank field just means "not provided".
 **Consequence:** History and stats stay consistent. Undoing a wrong status change (for example a REJECTED set by mistake) needs its own design and is not supported yet.
 **Related:** With `cacheComponents`, Next.js keeps previously visited pages in the DOM (hidden) for instant back navigation. That means the add and edit forms can exist at the same time, so form fields get ids from `useId()` instead of fixed ids like `company`.
+
+## 009 — Undo removes the last StatusEvent (2026-11-21)
+**Context:** A mistaken status change, especially into a final state like REJECTED, couldn't be reversed.
+**Decision:** "Undo last change" deletes the most recent `StatusEvent` and restores its `fromStatus`. It runs in one transaction with the application row locked and refuses if the event doesn't match the current status. The creation event (`fromStatus = null`) can't be undone.
+**Consequence:** History always reflects what really happened, so stats need no correction logic. The trade-off is that there's no audit trail of undone mistakes, which a single-user tracker doesn't need.
