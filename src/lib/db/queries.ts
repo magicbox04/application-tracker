@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, desc, eq } from "drizzle-orm";
 import type { Status } from "@/lib/domain/status";
 import { type TransitionError, validateTransition } from "@/lib/domain/transitions";
+import { planUndo } from "@/lib/domain/undo";
 import { db } from "@/lib/db/client";
 import {
   type Application,
@@ -122,6 +123,46 @@ export async function changeApplicationStatus(
       toStatus,
     });
     return { ok: true } as const;
+  });
+}
+
+export type UndoStatusResult =
+  | { ok: true; revertedTo: Status }
+  | { ok: false; reason: "NOT_FOUND" | "NOTHING_TO_UNDO" | "OUT_OF_SYNC" };
+
+/**
+ * Removes the most recent StatusEvent and restores its fromStatus, in one
+ * transaction with the application row locked (same as status changes).
+ */
+export async function undoLastStatusChange(
+  userId: string,
+  applicationId: string,
+): Promise<UndoStatusResult> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ status: applications.status })
+      .from(applications)
+      .where(and(eq(applications.id, applicationId), eq(applications.userId, userId)))
+      .for("update");
+    if (!current) return { ok: false, reason: "NOT_FOUND" } as const;
+
+    const [last] = await tx
+      .select()
+      .from(statusEvents)
+      .where(eq(statusEvents.applicationId, applicationId))
+      .orderBy(desc(statusEvents.changedAt))
+      .limit(1);
+
+    if (!last) return { ok: false, reason: "NOTHING_TO_UNDO" } as const;
+    const plan = planUndo(current.status, last);
+    if (!plan.ok) return plan;
+
+    await tx.delete(statusEvents).where(eq(statusEvents.id, last.id));
+    await tx
+      .update(applications)
+      .set({ status: plan.revertTo, updatedAt: new Date() })
+      .where(eq(applications.id, applicationId));
+    return { ok: true, revertedTo: plan.revertTo } as const;
   });
 }
 

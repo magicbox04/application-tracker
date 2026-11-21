@@ -8,6 +8,7 @@ import {
   changeApplicationStatus,
   createApplication,
   deleteApplication,
+  undoLastStatusChange,
   updateApplication,
 } from "@/lib/db/queries";
 import {
@@ -94,6 +95,26 @@ export async function changeStatusAction(
     parsed.data.toStatus,
   );
   if (!result.ok) return { ok: false, message: TRANSITION_MESSAGES[result.reason] };
+  refresh();
+  return { ok: true };
+}
+
+const UNDO_MESSAGES = {
+  NOT_FOUND: TRANSITION_MESSAGES.NOT_FOUND,
+  NOTHING_TO_UNDO: "There's no status change to undo.",
+  OUT_OF_SYNC: "The history changed in the meantime. Reload and try again.",
+} as const;
+
+export async function undoStatusAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const parsed = applicationIdSchema.safeParse(formValues(formData));
+  if (!parsed.success) return { ok: false, message: "Invalid request." };
+
+  const userId = await getCurrentUserId();
+  const result = await undoLastStatusChange(userId, parsed.data.applicationId);
+  if (!result.ok) return { ok: false, message: UNDO_MESSAGES[result.reason] };
   refresh();
   return { ok: true };
 }

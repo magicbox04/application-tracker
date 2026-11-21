@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { DeleteButton } from "@/components/delete-button";
 import { STATUS_LABELS, StatusBadge } from "@/components/status-badge";
 import { StatusSelect } from "@/components/status-select";
+import { UndoStatusButton } from "@/components/undo-status-button";
 import { getCurrentUserId } from "@/lib/auth/current-user";
 import { getApplicationWithEvents } from "@/lib/db/queries";
 import { getAllowedTransitions } from "@/lib/domain/transitions";
+import { planUndo } from "@/lib/domain/undo";
 import { applicationIdSchema } from "@/lib/validation/application";
 
 const dateTime = new Intl.DateTimeFormat("en-CA", {
@@ -24,6 +26,8 @@ export default async function ApplicationPage({
   const data = await getApplicationWithEvents(userId, id);
   if (!data) notFound();
   const { application: app, events } = data;
+  const lastEvent = events.at(-1);
+  const canUndo = planUndo(app.status, lastEvent).ok;
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
@@ -78,6 +82,12 @@ export default async function ApplicationPage({
             </li>
           ))}
         </ol>
+        {canUndo && lastEvent?.fromStatus && (
+          <UndoStatusButton
+            applicationId={app.id}
+            change={`${STATUS_LABELS[lastEvent.fromStatus]} → ${STATUS_LABELS[lastEvent.toStatus]}`}
+          />
+        )}
       </section>
 
       <div className="flex items-center gap-2">
