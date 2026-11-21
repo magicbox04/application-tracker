@@ -74,6 +74,76 @@ test("shows validation errors and keeps what was typed", async ({ page }) => {
   await expect(page.getByLabel("Job posting URL")).toHaveValue("ftp://acme.example/job");
 });
 
+test("edit an application's details without touching its status", async ({ page }) => {
+  const company = `E2E Change ${Date.now()}`;
+  const renamed = `${company} Renamed`;
+  // Next.js keeps previously visited pages in the DOM (display: none) after
+  // client-side navigation. getByRole skips hidden elements, so scoping to
+  // the visible <main> keeps lookups on the current page.
+  const main = page.getByRole("main");
+
+  // Create one with a location and a deadline
+  await page.goto("/");
+  await page.getByLabel("Company *").fill(company);
+  await page.getByLabel("Role *").fill("Backend Engineer");
+  await page.getByLabel("Status", { exact: true }).selectOption("INTERVIEW");
+  await page.getByLabel("Location").fill("Busan");
+  await page.getByLabel("Deadline").fill("2026-12-15");
+  await page.getByRole("button", { name: "Add application" }).click();
+  await expect(page.getByRole("status")).toHaveText("Application added.");
+
+  const row = page.getByTestId("application-row").filter({ hasText: company });
+  await row.getByRole("link", { name: `${company} — Backend Engineer` }).click();
+  await expect(page.getByTestId("status-history")).toBeVisible();
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/edit$/);
+
+  // Form is prefilled and has no status field
+  await expect(main.getByRole("heading", { name: /^Edit / })).toBeVisible();
+  await expect(main.getByLabel("Company *")).toHaveValue(company);
+  await expect(main.getByLabel("Location")).toHaveValue("Busan");
+  await expect(main.getByLabel("Deadline")).toHaveValue("2026-12-15");
+  await expect(main.getByLabel("Status", { exact: true })).toHaveCount(0);
+
+  // A validation error keeps the edits on screen
+  await main.getByLabel("Company *").fill(renamed);
+  await main.getByLabel("Job posting URL").fill("ftp://bad.example");
+  await main.getByRole("button", { name: "Save changes" }).click();
+  await expect(main.getByRole("status")).toHaveText("Please fix the highlighted fields.");
+  await expect(main.getByLabel("Company *")).toHaveValue(renamed);
+
+  // Fix it, clear the location, add notes, save
+  await main.getByLabel("Job posting URL").fill("https://jobs.example/42");
+  await main.getByLabel("Location").fill("");
+  await main.getByLabel("Notes").fill("Recruiter: Park");
+  await main.getByRole("button", { name: "Save changes" }).click();
+
+  // Back on the detail page with the new values
+  const label = `${renamed} — Backend Engineer`;
+  await expect(main.getByRole("heading", { name: label })).toBeVisible();
+  await expect(main.getByRole("link", { name: "https://jobs.example/42" })).toBeVisible();
+  const details = main.locator("dl");
+  await expect(details).toContainText("Recruiter: Park");
+  await expect(details).not.toContainText("Busan");
+  await expect(details).toContainText("2026-12-15");
+
+  // Status and history are untouched
+  await expect(main.getByTestId("status-badge")).toHaveText("Interview");
+  const history = main.getByTestId("status-history").locator("li");
+  await expect(history).toHaveCount(1);
+  await expect(history.first()).toContainText("Added as Interview");
+
+  // Clean up
+  page.once("dialog", (dialog) => dialog.accept());
+  await main.getByRole("button", { name: `Delete ${label}` }).click();
+  await expect(page).toHaveURL("/");
+});
+
+test("edit page for an unknown id shows the not-found page", async ({ page }) => {
+  await page.goto("/applications/00000000-0000-4000-8000-000000000000/edit");
+  await expect(page.getByText("This page could not be found.")).toBeVisible();
+});
+
 test("unknown application id shows the not-found page", async ({ page }) => {
   // The page streams (loading.tsx), so notFound() runs after the 200 status is
   // sent. Next.js renders the not-found UI and adds noindex instead.
