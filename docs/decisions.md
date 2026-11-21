@@ -47,3 +47,12 @@ Short records of non-obvious choices. Newest last. Format: context → decision 
 **Context:** A mistaken status change, especially into a final state like REJECTED, couldn't be reversed.
 **Decision:** "Undo last change" deletes the most recent `StatusEvent` and restores its `fromStatus`. It runs in one transaction with the application row locked and refuses if the event doesn't match the current status. The creation event (`fromStatus = null`) can't be undone.
 **Consequence:** History always reflects what really happened, so stats need no correction logic. The trade-off is that there's no audit trail of undone mistakes, which a single-user tracker doesn't need.
+
+## 010 — How pipeline stats are defined (2026-11-21)
+**Context:** Stats must come from the StatusEvent history (CLAUDE.md), and several definitions are judgment calls.
+**Decision:** `computeStats` in `src/lib/domain/stats.ts` is a pure function over each application's events:
+- **Funnel**: an application counts for every stage it *ever* reached, even if it later ended. Reaching a later stage implies the earlier ones (APPLIED → INTERVIEW counts as screening passed). A rejection implies it had applied.
+- **Response**: any move past APPLIED, or a rejection. Withdrawing is not a response.
+- **Rejection stage**: the `fromStatus` of the rejection event. Applications added directly as REJECTED show as "unknown stage".
+- **Days to first response**: from `appliedAt` if the user set it, otherwise the APPLIED event's time, to the first later response. Applications added past APPLIED (no APPLIED event) are excluded.
+**Consequence:** Undo (009) needs no special handling here, because the removed event simply isn't counted.
