@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, desc, eq } from "drizzle-orm";
 import type { Status } from "@/lib/domain/status";
 import { type TransitionError, validateTransition } from "@/lib/domain/transitions";
+import type { StatsApplication } from "@/lib/domain/stats";
 import { planUndo } from "@/lib/domain/undo";
 import { db } from "@/lib/db/client";
 import {
@@ -50,6 +51,42 @@ export async function getApplicationWithEvents(
     .where(eq(statusEvents.applicationId, applicationId))
     .orderBy(asc(statusEvents.changedAt));
   return { application, events };
+}
+
+/** Every application of the user with its full status history, for stats. */
+export async function getStatsInput(userId: string): Promise<StatsApplication[]> {
+  const apps = await db
+    .select({
+      id: applications.id,
+      status: applications.status,
+      appliedAt: applications.appliedAt,
+    })
+    .from(applications)
+    .where(eq(applications.userId, userId));
+
+  const events = await db
+    .select({
+      applicationId: statusEvents.applicationId,
+      fromStatus: statusEvents.fromStatus,
+      toStatus: statusEvents.toStatus,
+      changedAt: statusEvents.changedAt,
+    })
+    .from(statusEvents)
+    .innerJoin(applications, eq(statusEvents.applicationId, applications.id))
+    .where(eq(applications.userId, userId))
+    .orderBy(asc(statusEvents.changedAt));
+
+  const eventsByApp = new Map<string, StatsApplication["events"]>();
+  for (const { applicationId, ...event } of events) {
+    const list = eventsByApp.get(applicationId) ?? [];
+    list.push(event);
+    eventsByApp.set(applicationId, list);
+  }
+  return apps.map(({ id, status, appliedAt }) => ({
+    status,
+    appliedAt,
+    events: eventsByApp.get(id) ?? [],
+  }));
 }
 
 /** Creates the application and its first StatusEvent (from: null) together. */
