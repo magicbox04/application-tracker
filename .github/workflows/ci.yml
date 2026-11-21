@@ -22,3 +22,9 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      # Catches Cache Components errors (e.g. request data outside Suspense)
+      # that only show up when prerendering. The build never connects to the
+      # database: every DB read happens after connection(), at request time.
+      - run: npm run build
+        env:
+          DATABASE_URL: postgres://build:build@localhost:5432/build
