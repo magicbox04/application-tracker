@@ -9,7 +9,10 @@ import {
   type StatusEvent,
   statusEvents,
 } from "@/lib/db/schema";
-import type { CreateApplicationInput } from "@/lib/validation/application";
+import type {
+  CreateApplicationInput,
+  UpdateApplicationInput,
+} from "@/lib/validation/application";
 
 // Every query takes the caller's userId and filters by it, so a user can only
 // ever read or change their own records (CLAUDE.md rule 5).
@@ -22,14 +25,22 @@ export async function listApplications(userId: string): Promise<Application[]> {
     .orderBy(desc(applications.createdAt));
 }
 
-export async function getApplicationWithEvents(
+export async function getApplication(
   userId: string,
   applicationId: string,
-): Promise<{ application: Application; events: StatusEvent[] } | null> {
+): Promise<Application | null> {
   const [application] = await db
     .select()
     .from(applications)
     .where(and(eq(applications.id, applicationId), eq(applications.userId, userId)));
+  return application ?? null;
+}
+
+export async function getApplicationWithEvents(
+  userId: string,
+  applicationId: string,
+): Promise<{ application: Application; events: StatusEvent[] } | null> {
+  const application = await getApplication(userId, applicationId);
   if (!application) return null;
 
   const events = await db
@@ -58,6 +69,22 @@ export async function createApplication(
     });
     return created;
   });
+}
+
+/**
+ * Updates the editable fields (never status). Returns false when the
+ * application doesn't exist or isn't the user's.
+ */
+export async function updateApplication(
+  userId: string,
+  { applicationId, ...fields }: UpdateApplicationInput,
+): Promise<boolean> {
+  const updated = await db
+    .update(applications)
+    .set({ ...fields, updatedAt: new Date() })
+    .where(and(eq(applications.id, applicationId), eq(applications.userId, userId)))
+    .returning({ id: applications.id });
+  return updated.length > 0;
 }
 
 export type ChangeStatusResult =

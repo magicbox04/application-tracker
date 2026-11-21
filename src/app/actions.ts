@@ -8,11 +8,13 @@ import {
   changeApplicationStatus,
   createApplication,
   deleteApplication,
+  updateApplication,
 } from "@/lib/db/queries";
 import {
   applicationIdSchema,
   changeStatusSchema,
   createApplicationSchema,
+  updateApplicationSchema,
 } from "@/lib/validation/application";
 
 export type FormState = {
@@ -56,6 +58,26 @@ export async function createApplicationAction(
   await createApplication(userId, parsed.data);
   refresh();
   return { ok: true, message: "Application added." };
+}
+
+export async function updateApplicationAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const values = formValues(formData);
+  const parsed = updateApplicationSchema.safeParse(values);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: "Please fix the highlighted fields.",
+      fieldErrors: z.flattenError(parsed.error).fieldErrors,
+      values,
+    };
+  }
+  const userId = await getCurrentUserId();
+  const found = await updateApplication(userId, parsed.data);
+  if (!found) return { ok: false, message: TRANSITION_MESSAGES.NOT_FOUND, values };
+  redirect(`/applications/${parsed.data.applicationId}`);
 }
 
 export async function changeStatusAction(
