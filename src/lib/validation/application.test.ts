@@ -3,6 +3,7 @@ import {
   applicationIdSchema,
   changeStatusSchema,
   createApplicationSchema,
+  updateApplicationSchema,
 } from "@/lib/validation/application";
 
 const ID = "3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b";
@@ -108,6 +109,70 @@ describe("createApplicationSchema", () => {
     expect(
       createApplicationSchema.safeParse({ ...base, notes: "x".repeat(5001) }).success,
     ).toBe(false);
+  });
+});
+
+describe("updateApplicationSchema", () => {
+  const full = {
+    applicationId: ID,
+    company: "Acme",
+    role: "Frontend Engineer",
+    url: "https://acme.example/jobs/1",
+    location: "Seoul",
+    appliedAt: "2026-11-01",
+    deadline: "2026-11-30",
+    notes: "Referral",
+  };
+
+  it("accepts every editable field", () => {
+    expect(updateApplicationSchema.parse(full)).toEqual(full);
+  });
+
+  it("turns blank optional fields into null, so editing can clear a value", () => {
+    const result = updateApplicationSchema.parse({
+      ...full,
+      url: "",
+      location: "  ",
+      appliedAt: "",
+      deadline: "",
+      notes: "",
+    });
+    expect(result).toEqual({
+      applicationId: ID,
+      company: "Acme",
+      role: "Frontend Engineer",
+      url: null,
+      location: null,
+      appliedAt: null,
+      deadline: null,
+      notes: null,
+    });
+  });
+
+  it("treats missing optional fields as cleared too (the form sends every field)", () => {
+    const result = updateApplicationSchema.parse({
+      applicationId: ID,
+      company: "Acme",
+      role: "Dev",
+    });
+    expect(result.location).toBeNull();
+    expect(result.notes).toBeNull();
+  });
+
+  it("does not let the edit form change status", () => {
+    const result = updateApplicationSchema.parse({ ...full, status: "OFFER" });
+    expect(result).not.toHaveProperty("status");
+  });
+
+  it("applies the same rules as create", () => {
+    expect(updateApplicationSchema.safeParse({ ...full, company: " " }).success).toBe(false);
+    expect(updateApplicationSchema.safeParse({ ...full, url: "javascript:alert(1)" }).success).toBe(
+      false,
+    );
+    expect(updateApplicationSchema.safeParse({ ...full, deadline: "2026-02-30" }).success).toBe(
+      false,
+    );
+    expect(updateApplicationSchema.safeParse({ ...full, applicationId: "1" }).success).toBe(false);
   });
 });
 
