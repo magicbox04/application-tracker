@@ -36,3 +36,9 @@ Short records of non-obvious choices. Newest last. Format: context → decision 
 **Context:** We start on local Postgres and will move to Neon.
 **Decision:** Use Drizzle with `postgres` (postgres.js). It speaks the plain Postgres protocol, so it works with both local Postgres and Neon's pooled URL. Use `drizzle-kit push` while the schema is still changing.
 **Consequence:** Moving to Neon only needs a new `DATABASE_URL`. Before real data lives in Neon, switch to generated migrations (`drizzle-kit generate` + `migrate`).
+
+## 008 — The edit form never changes status (2026-11-21)
+**Context:** Users need to fix typos and update details, but statistics depend on every status change being validated and logged.
+**Decision:** `updateApplicationSchema` has no `status` field, so status only changes through `changeStatusAction`, which runs the transition rules and writes a `StatusEvent`. When editing, a blank or missing optional field means "clear it" and is stored as `null`. When creating, a blank field just means "not provided".
+**Consequence:** History and stats stay consistent. Undoing a wrong status change (for example a REJECTED set by mistake) needs its own design and is not supported yet.
+**Related:** With `cacheComponents`, Next.js keeps previously visited pages in the DOM (hidden) for instant back navigation. That means the add and edit forms can exist at the same time, so form fields get ids from `useId()` instead of fixed ids like `company`.
